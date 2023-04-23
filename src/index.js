@@ -11,42 +11,50 @@ const refs = {
 
 refs.formEl.addEventListener('submit', onSend);
 
-const target = {
+const body = {
   text: '',
   page: 1,
   per_page: 40,
 };
 
-let totalHits = 0;
 let countPerPage = 0;
+
+const lightbox = new SimpleLightbox('.gallery img', {
+  sourceAttr: 'data-lagre-url',
+});
 
 const options = {
   rootMargin: '800px',
 };
+
 const observerScroll = new IntersectionObserver(onScroll, options);
 
 async function onSend(e) {
   e.preventDefault();
-  target.page = 1;
-  target.text = e.target.children.searchQuery.value;
+  body.text = e.target.children.searchQuery.value;
+  body.page = 1;
+  countPerPage = body.per_page;
+  observerScroll.unobserve(refs.guardEl);
 
-  await searchPhoto(target).then(data => {
+  await searchPhoto(body).then(data => {
     const response = data.data;
-    totalHits = response.totalHits;
 
-    if (totalHits >= target.per_page) {
-      observerScroll.observe(refs.guardEl);
-      countPerPage += target.per_page;
-    }
-
-    Notiflix.Notify.success(`Hooray! We found ${totalHits} images.`);
-    if (response.hits.length === 0) {
+    if (response.totalHits === 0) {
       Notiflix.Notify.failure(
         'Sorry, there are no images matching your search query. Please try again.'
       );
+      refs.galleryEl.innerHTML = '';
       return;
     }
+    console.log('object');
+
+    if (response.totalHits >= body.per_page) {
+      observerScroll.observe(refs.guardEl);
+    }
+
     refs.galleryEl.innerHTML = createMarkup([...response.hits]);
+    lightbox.refresh();
+    Notiflix.Notify.success(`Hooray! We found ${response.totalHits} images.`);
   });
 }
 
@@ -63,7 +71,7 @@ function createMarkup(arr) {
         downloads,
       }) => `
     <div class="photo-card">
-        <a href="${largeImageURL}"><img class="img-card" src="${webformatURL}" alt="${tags}" loading="lazy" /></a>
+        <img class="img-card" data-lagre-url="${largeImageURL}" src="${webformatURL}" alt="${tags}" loading="lazy" />
         <div class="info">
             <p class="info-item">
                 <span>Likes</span>
@@ -86,28 +94,29 @@ function createMarkup(arr) {
     `
     )
     .join('');
-
-  const lightbox = new SimpleLightbox('.gallery a');
   return cardMarkup;
 }
 
 function onScroll(entries) {
   entries.forEach(async entry => {
     if (entry.isIntersecting) {
-      countPerPage += target.per_page;
-
-      await searchPhoto(target)
+      body.page += 1;
+      await searchPhoto(body)
         .then(data => {
-          if (countPerPage >= totalHits) {
+          const response = data.data;
+          countPerPage += body.per_page;
+
+          if (countPerPage >= response.totalHits) {
             observerScroll.unobserve(refs.guardEl);
+            Notiflix.Notify.success(`The end😞`);
+            return;
           }
 
           refs.galleryEl.insertAdjacentHTML(
             'beforeend',
-            createMarkup([...data.data.hits])
+            createMarkup([...response.hits])
           );
-
-          target.page += 1;
+          lightbox.refresh();
         })
         .catch(err => {
           return;
