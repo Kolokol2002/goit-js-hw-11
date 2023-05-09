@@ -1,4 +1,5 @@
 import searchPhoto from './js/service_find_photo';
+import searchTerms from './js/array_start';
 import SimpleLightbox from 'simplelightbox';
 import Notiflix from 'notiflix';
 import 'simplelightbox/dist/simple-lightbox.min.css';
@@ -7,15 +8,20 @@ const refs = {
   galleryEl: document.querySelector('.gallery'),
   formEl: document.querySelector('.search-form'),
   guardEl: document.querySelector('.guard'),
+  loaderEl: document.querySelector('.loader'),
 };
 
 refs.formEl.addEventListener('submit', onSend);
 
+const randomText = Math.floor(Math.random() * 100);
+
 const body = {
-  text: '',
+  text: searchTerms[randomText],
   page: 1,
   per_page: 40,
 };
+
+start(body);
 
 let countPerPage = 0;
 
@@ -31,31 +37,41 @@ const observerScroll = new IntersectionObserver(onScroll, options);
 
 async function onSend(e) {
   e.preventDefault();
-  body.text = e.target.children.searchQuery.value;
+  const value = e.target.children.searchQuery.value;
+  if (!value) {
+    Notiflix.Notify.failure('You have not entered anything!!!');
+    return;
+  }
+  body.text = value;
   body.page = 1;
   countPerPage = body.per_page;
   observerScroll.unobserve(refs.guardEl);
+  refs.loaderEl.classList.toggle('disable');
+  refs.galleryEl.innerHTML = '';
 
-  await searchPhoto(body).then(data => {
-    const response = data.data;
+  await searchPhoto(body)
+    .then(data => {
+      const response = data.data;
 
-    if (response.totalHits === 0) {
-      Notiflix.Notify.failure(
-        'Sorry, there are no images matching your search query. Please try again.'
-      );
-      refs.galleryEl.innerHTML = '';
-      return;
-    }
-    console.log('object');
+      if (response.totalHits === 0) {
+        Notiflix.Notify.failure(
+          'Sorry, there are no images matching your search query. Please try again.'
+        );
+        refs.galleryEl.innerHTML = '';
+        return;
+      }
 
-    if (response.totalHits >= body.per_page) {
-      observerScroll.observe(refs.guardEl);
-    }
+      if (response.totalHits >= body.per_page) {
+        observerScroll.observe(refs.guardEl);
+      }
 
-    refs.galleryEl.innerHTML = createMarkup([...response.hits]);
-    lightbox.refresh();
-    Notiflix.Notify.success(`Hooray! We found ${response.totalHits} images.`);
-  });
+      refs.galleryEl.innerHTML = createMarkup([...response.hits]);
+      lightbox.refresh();
+      Notiflix.Notify.success(`Hooray! We found ${response.totalHits} images.`);
+    })
+    .finally(() => {
+      refs.loaderEl.classList.toggle('disable');
+    });
 }
 
 function createMarkup(arr) {
@@ -71,7 +87,15 @@ function createMarkup(arr) {
         downloads,
       }) => `
     <div class="photo-card">
-        <img class="img-card" data-lagre-url="${largeImageURL}" src="${webformatURL}" alt="${tags}" loading="lazy" />
+        <img class="img-card" data-lagre-url="${
+          largeImageURL
+            ? largeImageURL
+            : 'https://img.freepik.com/premium-vector/error-404-page-found-vector-concept-icon-internet-website-down-simple-flat-design_570429-4168.jpg'
+        }" src="${
+        webformatURL
+          ? webformatURL
+          : 'https://img.freepik.com/premium-vector/error-404-page-found-vector-concept-icon-internet-website-down-simple-flat-design_570429-4168.jpg'
+      }" alt="${tags}" loading="lazy" />
         <div class="info">
             <p class="info-item">
                 <span>Likes</span>
@@ -123,4 +147,22 @@ function onScroll(entries) {
         });
     }
   });
+}
+
+async function start(body) {
+  refs.loaderEl.classList.toggle('disable');
+  await searchPhoto(body)
+    .then(data => {
+      const response = data.data;
+
+      if (response.totalHits >= body.per_page) {
+        observerScroll.observe(refs.guardEl);
+      }
+
+      refs.galleryEl.innerHTML = createMarkup([...response.hits]);
+      lightbox.refresh();
+    })
+    .finally(() => {
+      refs.loaderEl.classList.toggle('disable');
+    });
 }
